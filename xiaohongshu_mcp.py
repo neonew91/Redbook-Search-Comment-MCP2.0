@@ -127,29 +127,90 @@ async def search_notes(keywords: str, limit: int = 5) -> str:
         await main_page.goto(search_url, timeout=60000)
         await asyncio.sleep(5)  # 等待页面加载
         
-        # 获取所有帖子卡片
-        post_elements = await main_page.query_selector_all('a[href*="/search_result/"]')
+        # 等待页面完全加载
+        await asyncio.sleep(5)
+        
+        # 打印页面HTML用于调试
+        page_html = await main_page.content()
+        print(f"页面HTML片段: {page_html[10000:10500]}...")
+        
+        # 使用更精确的选择器获取帖子卡片
+        print("尝试获取帖子卡片...")
+        post_cards = await main_page.query_selector_all('section.note-item')
+        print(f"找到 {len(post_cards)} 个帖子卡片")
+        
+        if not post_cards:
+            # 尝试备用选择器
+            post_cards = await main_page.query_selector_all('div[data-v-a264b01a]')
+            print(f"使用备用选择器找到 {len(post_cards)} 个帖子卡片")
         
         post_links = []
         post_titles = []
         
-        for element in post_elements:
-            href = await element.get_attribute('href')
-            if href and '/search_result/' in href:
-                full_url = f"https://www.xiaohongshu.com{href}"
-                post_links.append(full_url)
+        for card in post_cards:
+            try:
+                # 获取链接
+                link_element = await card.query_selector('a[href*="/search_result/"]')
+                if not link_element:
+                    continue
                 
-                # 尝试获取帖子标题
-                try:
-                    title_element = await element.query_selector('div.title')
-                    if title_element:
-                        title = await title_element.text_content()
-                    else:
+                href = await link_element.get_attribute('href')
+                if href and '/search_result/' in href:
+                    full_url = f"https://www.xiaohongshu.com{href}"
+                    post_links.append(full_url)
+                    
+                    # 尝试获取帖子标题
+                    try:
+                        # 打印卡片HTML用于调试
+                        card_html = await card.inner_html()
+                        print(f"卡片HTML片段: {card_html[:200]}...")
+                        
+                        # 首先尝试获取卡片内的footer中的标题
+                        title_element = await card.query_selector('div.footer a.title span')
+                        if title_element:
+                            title = await title_element.text_content()
+                            print(f"找到标题(方法1): {title}")
+                        else:
+                            # 尝试直接获取标题元素
+                            title_element = await card.query_selector('a.title span')
+                            if title_element:
+                                title = await title_element.text_content()
+                                print(f"找到标题(方法2): {title}")
+                            else:
+                                # 尝试获取任何可能的文本内容
+                                text_elements = await card.query_selector_all('span')
+                                potential_titles = []
+                                for text_el in text_elements:
+                                    text = await text_el.text_content()
+                                    if text and len(text.strip()) > 5:
+                                        potential_titles.append(text.strip())
+                                
+                                if potential_titles:
+                                    # 选择最长的文本作为标题
+                                    title = max(potential_titles, key=len)
+                                    print(f"找到可能的标题(方法3): {title}")
+                                else:
+                                    # 尝试直接获取卡片中的所有文本
+                                    all_text = await card.evaluate('el => Array.from(el.querySelectorAll("*")).map(node => node.textContent).filter(text => text && text.trim().length > 5)')
+                                    if all_text and len(all_text) > 0:
+                                        # 选择最长的文本作为标题
+                                        title = max(all_text, key=len)
+                                        print(f"找到可能的标题(方法4): {title}")
+                                    else:
+                                        title = "未知标题"
+                                        print("无法找到标题，使用默认值'未知标题'")
+                        
+                        # 如果获取到的标题为空，设为未知标题
+                        if not title or title.strip() == "":
+                            title = "未知标题"
+                            print("获取到的标题为空，使用默认值'未知标题'")
+                    except Exception as e:
+                        print(f"获取标题时出错: {str(e)}")
                         title = "未知标题"
-                except:
-                    title = "未知标题"
-                
-                post_titles.append(title)
+                    
+                    post_titles.append(title)
+            except Exception as e:
+                print(f"处理帖子卡片时出错: {str(e)}")
         
         # 去重
         unique_posts = []
