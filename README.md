@@ -61,7 +61,7 @@
 
 > **重要提示**：
 > - 请使用虚拟环境中Python解释器的**完整绝对路径**
-> - 例如：`/Users/username/Desktop/MCP/RednoteMCP-main/venv/bin/python3`
+> - 例如：`/Users/username/Desktop/RedBook-Search-Comment-MCP/venv/bin/python3`
 > - 同样，xiaohongshu_mcp.py也需要使用**完整绝对路径**
 
 ## 四、使用方法
