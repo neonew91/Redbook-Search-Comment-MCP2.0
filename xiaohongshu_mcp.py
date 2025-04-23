@@ -934,7 +934,94 @@ async def get_note_comments(url: str) -> str:
         return f"获取评论时出错: {str(e)}"
 
 @mcp.tool()
-async def post_smart_comment(url: str, comment_type: str = "引流") -> str:
+async def analyze_note(url: str) -> dict:
+    """获取并分析笔记内容，返回笔记的详细信息供AI生成评论
+    
+    Args:
+        url: 笔记 URL
+    """
+    login_status = await ensure_browser()
+    if not login_status:
+        return {"error": "请先登录小红书账号"}
+    
+    try:
+        # 直接调用get_note_content获取笔记内容
+        note_content_result = await get_note_content(url)
+        
+        # 检查是否获取成功
+        if note_content_result.startswith("请先登录") or note_content_result.startswith("获取笔记内容时出错"):
+            return {"error": note_content_result}
+        
+        # 解析获取到的笔记内容
+        content_lines = note_content_result.strip().split('\n')
+        post_content = {}
+        
+        # 提取标题、作者、发布时间和内容
+        for i, line in enumerate(content_lines):
+            if line.startswith("标题:"):
+                post_content["标题"] = line.replace("标题:", "").strip()
+            elif line.startswith("作者:"):
+                post_content["作者"] = line.replace("作者:", "").strip()
+            elif line.startswith("发布时间:"):
+                post_content["发布时间"] = line.replace("发布时间:", "").strip()
+            elif line.startswith("内容:"):
+                # 内容可能有多行，获取剩余所有行
+                content_text = "\n".join(content_lines[i+1:]).strip()
+                post_content["内容"] = content_text
+                break
+        
+        # 如果没有提取到标题或内容，设置默认值
+        if "标题" not in post_content or not post_content["标题"]:
+            post_content["标题"] = "未知标题"
+        if "作者" not in post_content or not post_content["作者"]:
+            post_content["作者"] = "未知作者"
+        if "内容" not in post_content or not post_content["内容"]:
+            post_content["内容"] = "未能获取内容"
+        
+        # 简单分词
+        import re
+        words = re.findall(r'\w+', f"{post_content.get('标题', '')} {post_content.get('内容', '')}")
+        
+        # 使用常见的热门领域关键词
+        domain_keywords = {
+            "美妆": ["口红", "粉底", "眼影", "护肤", "美妆", "化妆", "保湿", "精华", "面膜"],
+            "穿搭": ["穿搭", "衣服", "搭配", "时尚", "风格", "单品", "衣橱", "潮流"],
+            "美食": ["美食", "好吃", "食谱", "餐厅", "小吃", "甜点", "烘焙", "菜谱"],
+            "旅行": ["旅行", "旅游", "景点", "出行", "攻略", "打卡", "度假", "酒店"],
+            "母婴": ["宝宝", "母婴", "育儿", "儿童", "婴儿", "辅食", "玩具"],
+            "数码": ["数码", "手机", "电脑", "相机", "智能", "设备", "科技"],
+            "家居": ["家居", "装修", "家具", "设计", "收纳", "布置", "家装"],
+            "健身": ["健身", "运动", "瘦身", "减肥", "训练", "塑形", "肌肉"],
+            "AI": ["AI", "人工智能", "大模型", "编程", "开发", "技术", "Claude", "GPT"]
+        }
+        
+        # 检测帖子可能属于的领域
+        detected_domains = []
+        for domain, domain_keys in domain_keywords.items():
+            for key in domain_keys:
+                if key.lower() in post_content.get("标题", "").lower() or key.lower() in post_content.get("内容", "").lower():
+                    detected_domains.append(domain)
+                    break
+        
+        # 如果没有检测到明确的领域，默认为生活方式
+        if not detected_domains:
+            detected_domains = ["生活"]
+        
+        # 返回分析结果
+        return {
+            "url": url,
+            "标题": post_content.get("标题", "未知标题"),
+            "作者": post_content.get("作者", "未知作者"),
+            "内容": post_content.get("内容", "未能获取内容"),
+            "领域": detected_domains,
+            "关键词": list(set(words))[:20]  # 取前20个不重复的词作为关键词
+        }
+    
+    except Exception as e:
+        return {"error": f"分析笔记内容时出错: {str(e)}"}
+
+@mcp.tool()
+async def post_smart_comment(url: str, comment_type: str = "引流") -> dict:
     """根据帖子内容发布智能评论，增加曝光并引导用户关注或私聊
     
     Args:
@@ -945,6 +1032,33 @@ async def post_smart_comment(url: str, comment_type: str = "引流") -> str:
                      "咨询" - 以问题形式增加互动
                      "专业" - 展示专业知识建立权威
     """
+    # 获取笔记内容
+    note_info = await analyze_note(url)
+    
+    if "error" in note_info:
+        return {"error": note_info["error"]}
+    
+    # 返回笔记分析结果和评论类型，让MCP客户端(如Claude)生成评论
+    # MCP客户端生成评论后，应调用post_comment函数发布评论
+    return {
+        "note_info": note_info,
+        "comment_type": comment_type,
+        "message": "请根据笔记内容和评论类型，生成一条自然、相关的评论，要求口语化表达，简短凝练，不超过30字，然后使用post_comment函数发布"
+    }
+
+# 我们已经将原来的post_smart_comment函数重构为三个独立的函数：
+# 1. analyze_note - 获取并分析笔记内容
+# 2. post_comment - 发布评论
+# 3. post_smart_comment - 结合前两个功能，使用MCP客户端的AI能力生成评论
+
+@mcp.tool()
+async def post_comment(url: str, comment: str) -> str:
+    """发布评论到指定笔记
+    
+    Args:
+        url: 笔记 URL
+        comment: 要发布的评论内容
+    """
     login_status = await ensure_browser()
     if not login_status:
         return "请先登录小红书账号，才能发布评论"
@@ -953,78 +1067,6 @@ async def post_smart_comment(url: str, comment_type: str = "引流") -> str:
         # 访问帖子链接
         await main_page.goto(url, timeout=60000)
         await asyncio.sleep(5)  # 等待页面加载
-        
-        # 获取帖子内容进行分析
-        post_content = {}
-        
-        # 获取帖子标题
-        try:
-            title_element = await main_page.query_selector('text="编辑于"')
-            if title_element:
-                title = await title_element.evaluate('(el) => el.previousElementSibling ? el.previousElementSibling.textContent : ""')
-                post_content["标题"] = title.strip() if title else "未知标题"
-            else:
-                post_content["标题"] = "未知标题"
-        except Exception:
-            post_content["标题"] = "未知标题"
-        
-        # 获取作者
-        try:
-            author_element = await main_page.query_selector('a[href*="/user/profile/"]')
-            if author_element:
-                author = await author_element.text_content()
-                post_content["作者"] = author.strip() if author else "未知作者"
-            else:
-                post_content["作者"] = "未知作者"
-        except Exception:
-            post_content["作者"] = "未知作者"
-        
-        # 获取帖子正文内容
-        try:
-            content_selectors = [
-                'div.content', 
-                'div.note-content',
-                'article',
-                'div.desc'
-            ]
-            
-            post_content["内容"] = "未能获取内容"
-            for selector in content_selectors:
-                content_element = await main_page.query_selector(selector)
-                if content_element:
-                    content_text = await content_element.text_content()
-                    if content_text and len(content_text.strip()) > 10:
-                        post_content["内容"] = content_text.strip()
-                        break
-            
-            # 使用JavaScript提取主要文本内容
-            if post_content["内容"] == "未能获取内容":
-                content_text = await main_page.evaluate('''
-                    () => {
-                        const contentElements = Array.from(document.querySelectorAll('div, p, article'))
-                            .filter(el => {
-                                const text = el.textContent.trim();
-                                return text.length > 50 && text.length < 5000 &&
-                                    el.querySelectorAll('a, button').length < 5 &&
-                                    el.children.length < 10;
-                            })
-                            .sort((a, b) => b.textContent.length - a.textContent.length);
-                        
-                        if (contentElements.length > 0) {
-                            return contentElements[0].textContent.trim();
-                        }
-                        
-                        return null;
-                    }
-                ''')
-                
-                if content_text:
-                    post_content["内容"] = content_text
-        except Exception:
-            post_content["内容"] = "未能获取内容"
-        
-        # 根据帖子内容和评论类型生成智能评论
-        comment_text = await _generate_smart_comment(post_content, comment_type)
         
         # 基于页面快照定位评论输入框
         # 先定位评论区域
@@ -1094,7 +1136,7 @@ async def post_smart_comment(url: str, comment_type: str = "引流") -> str:
             await asyncio.sleep(1)
             
             # 使用键盘输入评论内容
-            await main_page.keyboard.type(comment_text)
+            await main_page.keyboard.type(comment)
             await asyncio.sleep(1)
             
             # 尝试使用Enter键发送
@@ -1124,13 +1166,13 @@ async def post_smart_comment(url: str, comment_type: str = "引流") -> str:
                 
                 await asyncio.sleep(3)  # 等待评论发送完成
                 
-                return f"已成功发布评论：{comment_text}"
+                return f"已成功发布评论：{comment}"
             except Exception as e:
                 # 如果点击发送按钮失败，尝试通过Enter键发送
                 try:
                     await main_page.keyboard.press('Enter')
                     await asyncio.sleep(3)
-                    return f"已通过Enter键发送评论：{comment_text}"
+                    return f"已通过Enter键发送评论：{comment}"
                 except Exception as press_error:
                     return f"尝试发送评论时出错: {str(e)}，尝试Enter键也失败: {str(press_error)}"
                 
