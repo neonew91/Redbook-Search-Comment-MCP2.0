@@ -250,85 +250,380 @@ async def get_note_content(url: str) -> str:
     try:
         # 访问帖子链接
         await main_page.goto(url, timeout=60000)
-        await asyncio.sleep(5)  # 等待页面加载
+        await asyncio.sleep(10)  # 增加等待时间到10秒
+        
+        # 增强滚动操作以确保所有内容加载
+        await main_page.evaluate('''
+            () => {
+                // 先滚动到页面底部
+                window.scrollTo(0, document.body.scrollHeight);
+                setTimeout(() => { 
+                    // 然后滚动到中间
+                    window.scrollTo(0, document.body.scrollHeight / 2); 
+                }, 1000);
+                setTimeout(() => { 
+                    // 最后回到顶部
+                    window.scrollTo(0, 0); 
+                }, 2000);
+            }
+        ''')
+        await asyncio.sleep(3)  # 等待滚动完成和内容加载
+        
+        # 打印页面结构片段用于分析
+        try:
+            print("打印页面结构片段用于分析")
+            page_structure = await main_page.evaluate('''
+                () => {
+                    // 获取笔记内容区域
+                    const noteContent = document.querySelector('.note-content');
+                    const detailDesc = document.querySelector('#detail-desc');
+                    const commentArea = document.querySelector('.comments-container, .comment-list');
+                    
+                    return {
+                        hasNoteContent: !!noteContent,
+                        hasDetailDesc: !!detailDesc,
+                        hasCommentArea: !!commentArea,
+                        noteContentHtml: noteContent ? noteContent.outerHTML.slice(0, 500) : null,
+                        detailDescHtml: detailDesc ? detailDesc.outerHTML.slice(0, 500) : null,
+                        commentAreaFirstChild: commentArea ? 
+                            (commentArea.firstElementChild ? commentArea.firstElementChild.outerHTML.slice(0, 500) : null) : null
+                    };
+                }
+            ''')
+            print(f"页面结构分析: {json.dumps(page_structure, ensure_ascii=False, indent=2)}")
+        except Exception as e:
+            print(f"打印页面结构时出错: {str(e)}")
         
         # 获取帖子内容
         post_content = {}
         
-        # 获取帖子标题
+        # 获取帖子标题 - 方法1：使用id选择器
         try:
-            title_element = await main_page.query_selector('text="编辑于"')
+            print("尝试获取标题 - 方法1：使用id选择器")
+            title_element = await main_page.query_selector('#detail-title')
             if title_element:
-                title = await title_element.evaluate('(el) => el.previousElementSibling ? el.previousElementSibling.textContent : ""')
+                title = await title_element.text_content()
                 post_content["标题"] = title.strip() if title else "未知标题"
+                print(f"方法1获取到标题: {post_content['标题']}")
             else:
+                print("方法1未找到标题元素")
                 post_content["标题"] = "未知标题"
         except Exception as e:
+            print(f"方法1获取标题出错: {str(e)}")
             post_content["标题"] = "未知标题"
         
-        # 获取作者
+        # 获取帖子标题 - 方法2：使用class选择器
+        if post_content["标题"] == "未知标题":
+            try:
+                print("尝试获取标题 - 方法2：使用class选择器")
+                title_element = await main_page.query_selector('div.title')
+                if title_element:
+                    title = await title_element.text_content()
+                    post_content["标题"] = title.strip() if title else "未知标题"
+                    print(f"方法2获取到标题: {post_content['标题']}")
+                else:
+                    print("方法2未找到标题元素")
+            except Exception as e:
+                print(f"方法2获取标题出错: {str(e)}")
+        
+        # 获取帖子标题 - 方法3：使用JavaScript
+        if post_content["标题"] == "未知标题":
+            try:
+                print("尝试获取标题 - 方法3：使用JavaScript")
+                title = await main_page.evaluate('''
+                    () => {
+                        // 尝试多种可能的标题选择器
+                        const selectors = [
+                            '#detail-title',
+                            'div.title',
+                            'h1',
+                            'div.note-content div.title'
+                        ];
+                        
+                        for (const selector of selectors) {
+                            const el = document.querySelector(selector);
+                            if (el && el.textContent.trim()) {
+                                return el.textContent.trim();
+                            }
+                        }
+                        return null;
+                    }
+                ''')
+                if title:
+                    post_content["标题"] = title
+                    print(f"方法3获取到标题: {post_content['标题']}")
+                else:
+                    print("方法3未找到标题元素")
+            except Exception as e:
+                print(f"方法3获取标题出错: {str(e)}")
+        
+        # 获取作者 - 方法1：使用username类选择器
         try:
-            author_element = await main_page.query_selector('a[href*="/user/profile/"]')
+            print("尝试获取作者 - 方法1：使用username类选择器")
+            author_element = await main_page.query_selector('span.username')
             if author_element:
                 author = await author_element.text_content()
                 post_content["作者"] = author.strip() if author else "未知作者"
+                print(f"方法1获取到作者: {post_content['作者']}")
             else:
+                print("方法1未找到作者元素")
                 post_content["作者"] = "未知作者"
         except Exception as e:
+            print(f"方法1获取作者出错: {str(e)}")
             post_content["作者"] = "未知作者"
         
-        # 获取发布时间
+        # 获取作者 - 方法2：使用链接选择器
+        if post_content["作者"] == "未知作者":
+            try:
+                print("尝试获取作者 - 方法2：使用链接选择器")
+                author_element = await main_page.query_selector('a.name')
+                if author_element:
+                    author = await author_element.text_content()
+                    post_content["作者"] = author.strip() if author else "未知作者"
+                    print(f"方法2获取到作者: {post_content['作者']}")
+                else:
+                    print("方法2未找到作者元素")
+            except Exception as e:
+                print(f"方法2获取作者出错: {str(e)}")
+        
+        # 获取作者 - 方法3：使用JavaScript
+        if post_content["作者"] == "未知作者":
+            try:
+                print("尝试获取作者 - 方法3：使用JavaScript")
+                author = await main_page.evaluate('''
+                    () => {
+                        // 尝试多种可能的作者选择器
+                        const selectors = [
+                            'span.username',
+                            'a.name',
+                            '.author-wrapper .username',
+                            '.info .name'
+                        ];
+                        
+                        for (const selector of selectors) {
+                            const el = document.querySelector(selector);
+                            if (el && el.textContent.trim()) {
+                                return el.textContent.trim();
+                            }
+                        }
+                        return null;
+                    }
+                ''')
+                if author:
+                    post_content["作者"] = author
+                    print(f"方法3获取到作者: {post_content['作者']}")
+                else:
+                    print("方法3未找到作者元素")
+            except Exception as e:
+                print(f"方法3获取作者出错: {str(e)}")
+        
+        # 获取发布时间 - 方法1：使用date类选择器
         try:
-            time_selectors = [
-                'text=/\\d{4}-\\d{2}-\\d{2}/',
-                'text=/\\d+月\\d+日/',
-                'text=/\\d+天前/',
-                'text=/\\d+小时前/',
-                'text=/今天/',
-                'text=/昨天/'
-            ]
-            
-            post_content["发布时间"] = "未知"
-            for selector in time_selectors:
-                time_element = await main_page.query_selector(selector)
-                if time_element:
-                    post_content["发布时间"] = await time_element.text_content()
-                    break
+            print("尝试获取发布时间 - 方法1：使用date类选择器")
+            time_element = await main_page.query_selector('span.date')
+            if time_element:
+                time_text = await time_element.text_content()
+                post_content["发布时间"] = time_text.strip() if time_text else "未知"
+                print(f"方法1获取到发布时间: {post_content['发布时间']}")
+            else:
+                print("方法1未找到发布时间元素")
+                post_content["发布时间"] = "未知"
         except Exception as e:
+            print(f"方法1获取发布时间出错: {str(e)}")
             post_content["发布时间"] = "未知"
         
-        # 获取帖子正文内容
-        try:
-            content_selectors = [
-                'div.content', 
-                'div.note-content',
-                'article',
-                'div.desc'
-            ]
-            
-            post_content["内容"] = "未能获取内容"
-            for selector in content_selectors:
-                content_element = await main_page.query_selector(selector)
-                if content_element:
-                    content_text = await content_element.text_content()
-                    if content_text and len(content_text.strip()) > 10:
-                        post_content["内容"] = content_text.strip()
+        # 获取发布时间 - 方法2：使用正则表达式匹配
+        if post_content["发布时间"] == "未知":
+            try:
+                print("尝试获取发布时间 - 方法2：使用正则表达式匹配")
+                time_selectors = [
+                    'text=/编辑于/',
+                    'text=/\\d{2}-\\d{2}/',
+                    'text=/\\d{4}-\\d{2}-\\d{2}/',
+                    'text=/\\d+月\\d+日/',
+                    'text=/\\d+天前/',
+                    'text=/\\d+小时前/',
+                    'text=/今天/',
+                    'text=/昨天/'
+                ]
+                
+                for selector in time_selectors:
+                    time_element = await main_page.query_selector(selector)
+                    if time_element:
+                        time_text = await time_element.text_content()
+                        post_content["发布时间"] = time_text.strip() if time_text else "未知"
+                        print(f"方法2获取到发布时间: {post_content['发布时间']}")
                         break
+                    else:
+                        print(f"方法2未找到发布时间元素: {selector}")
+            except Exception as e:
+                print(f"方法2获取发布时间出错: {str(e)}")
+        
+        # 获取发布时间 - 方法3：使用JavaScript
+        if post_content["发布时间"] == "未知":
+            try:
+                print("尝试获取发布时间 - 方法3：使用JavaScript")
+                time_text = await main_page.evaluate('''
+                    () => {
+                        // 尝试多种可能的时间选择器
+                        const selectors = [
+                            'span.date',
+                            '.bottom-container .date',
+                            '.date'
+                        ];
+                        
+                        for (const selector of selectors) {
+                            const el = document.querySelector(selector);
+                            if (el && el.textContent.trim()) {
+                                return el.textContent.trim();
+                            }
+                        }
+                        
+                        // 尝试查找包含日期格式的文本
+                        const dateRegexes = [
+                            /编辑于\s*([\d-]+)/,
+                            /(\d{2}-\d{2})/,
+                            /(\d{4}-\d{2}-\d{2})/,
+                            /(\d+月\d+日)/,
+                            /(\d+天前)/,
+                            /(\d+小时前)/,
+                            /(今天)/,
+                            /(昨天)/
+                        ];
+                        
+                        const allText = document.body.textContent;
+                        for (const regex of dateRegexes) {
+                            const match = allText.match(regex);
+                            if (match) {
+                                return match[0];
+                            }
+                        }
+                        
+                        return null;
+                    }
+                ''')
+                if time_text:
+                    post_content["发布时间"] = time_text
+                    print(f"方法3获取到发布时间: {post_content['发布时间']}")
+                else:
+                    print("方法3未找到发布时间元素")
+            except Exception as e:
+                print(f"方法3获取发布时间出错: {str(e)}")
+        
+        # 获取帖子正文内容 - 方法1：使用精确的ID和class选择器
+        try:
+            print("尝试获取正文内容 - 方法1：使用精确的ID和class选择器")
             
-            # 使用JavaScript提取主要文本内容
-            if post_content["内容"] == "未能获取内容":
+            # 先明确标记评论区域
+            await main_page.evaluate('''
+                () => {
+                    const commentSelectors = [
+                        '.comments-container', 
+                        '.comment-list',
+                        '.feed-comment',
+                        'div[data-v-aed4aacc]',  // 根据您提供的评论HTML结构
+                        '.content span.note-text'  // 评论中的note-text结构
+                    ];
+                    
+                    for (const selector of commentSelectors) {
+                        const elements = document.querySelectorAll(selector);
+                        elements.forEach(el => {
+                            if (el) {
+                                el.setAttribute('data-is-comment', 'true');
+                                console.log('标记评论区域:', el.tagName, el.className);
+                            }
+                        });
+                    }
+                }
+            ''')
+            
+            # 先尝试获取detail-desc和note-text组合
+            content_element = await main_page.query_selector('#detail-desc .note-text')
+            if content_element:
+                # 检查是否在评论区域内
+                is_in_comment = await content_element.evaluate('(el) => !!el.closest("[data-is-comment=\'true\']") || false')
+                if not is_in_comment:
+                    content_text = await content_element.text_content()
+                    if content_text and len(content_text.strip()) > 50:  # 增加长度阈值
+                        post_content["内容"] = content_text.strip()
+                        print(f"方法1获取到正文内容，长度: {len(post_content['内容'])}")
+                    else:
+                        print(f"方法1获取到的内容太短: {len(content_text.strip() if content_text else 0)}")
+                        post_content["内容"] = "未能获取内容"
+                else:
+                    print("方法1找到的元素在评论区域内，跳过")
+                    post_content["内容"] = "未能获取内容"
+            else:
+                print("方法1未找到正文内容元素")
+                post_content["内容"] = "未能获取内容"
+        except Exception as e:
+            print(f"方法1获取正文内容出错: {str(e)}")
+            post_content["内容"] = "未能获取内容"
+        
+        # 获取帖子正文内容 - 方法2：使用XPath选择器
+        if post_content["内容"] == "未能获取内容":
+            try:
+                print("尝试获取正文内容 - 方法2：使用XPath选择器")
+                # 使用XPath获取笔记内容区域
                 content_text = await main_page.evaluate('''
                     () => {
-                        const contentElements = Array.from(document.querySelectorAll('div, p, article'))
+                        const xpath = '//div[@id="detail-desc"]/span[@class="note-text"]';
+                        const result = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+                        const element = result.singleNodeValue;
+                        return element ? element.textContent.trim() : null;
+                    }
+                ''')
+                
+                if content_text and len(content_text) > 20:
+                    post_content["内容"] = content_text
+                    print(f"方法2获取到正文内容，长度: {len(post_content['内容'])}")
+                else:
+                    print(f"方法2获取到的内容太短或为空: {len(content_text) if content_text else 0}")
+            except Exception as e:
+                print(f"方法2获取正文内容出错: {str(e)}")
+        
+        # 获取帖子正文内容 - 方法3：使用JavaScript获取最长文本
+        if post_content["内容"] == "未能获取内容":
+            try:
+                print("尝试获取正文内容 - 方法3：使用JavaScript获取最长文本")
+                content_text = await main_page.evaluate('''
+                    () => {
+                        // 定义评论区域选择器
+                        const commentSelectors = [
+                            '.comments-container', 
+                            '.comment-list',
+                            '.feed-comment',
+                            'div[data-v-aed4aacc]',
+                            '.comment-item',
+                            '[data-is-comment="true"]'
+                        ];
+                        
+                        // 找到所有评论区域
+                        let commentAreas = [];
+                        for (const selector of commentSelectors) {
+                            const elements = document.querySelectorAll(selector);
+                            elements.forEach(el => commentAreas.push(el));
+                        }
+                        
+                        // 查找可能的内容元素，排除评论区
+                        const contentElements = Array.from(document.querySelectorAll('div#detail-desc, div.note-content, div.desc, span.note-text'))
                             .filter(el => {
+                                // 检查是否在评论区域内
+                                const isInComment = commentAreas.some(commentArea => 
+                                    commentArea && commentArea.contains(el));
+                                
+                                if (isInComment) {
+                                    console.log('排除评论区域内容:', el.tagName, el.className);
+                                    return false;
+                                }
+                                
                                 const text = el.textContent.trim();
-                                return text.length > 50 && text.length < 5000 &&
-                                    el.querySelectorAll('a, button').length < 5 &&
-                                    el.children.length < 10;
+                                return text.length > 100 && text.length < 10000;
                             })
                             .sort((a, b) => b.textContent.length - a.textContent.length);
                         
                         if (contentElements.length > 0) {
+                            console.log('找到内容元素:', contentElements[0].tagName, contentElements[0].className);
                             return contentElements[0].textContent.trim();
                         }
                         
@@ -336,10 +631,101 @@ async def get_note_content(url: str) -> str:
                     }
                 ''')
                 
-                if content_text:
+                if content_text and len(content_text) > 100:  # 增加长度阈值
                     post_content["内容"] = content_text
-        except Exception as e:
-            post_content["内容"] = f"获取内容时出错: {str(e)}"
+                    print(f"方法3获取到正文内容，长度: {len(post_content['内容'])}")
+                else:
+                    print(f"方法3获取到的内容太短或为空: {len(content_text) if content_text else 0}")
+            except Exception as e:
+                print(f"方法3获取正文内容出错: {str(e)}")
+        
+        # 获取帖子正文内容 - 方法4：区分正文和评论内容
+        if post_content["内容"] == "未能获取内容":
+            try:
+                print("尝试获取正文内容 - 方法4：区分正文和评论内容")
+                content_text = await main_page.evaluate('''
+                    () => {
+                        // 首先尝试获取note-content区域
+                        const noteContent = document.querySelector('.note-content');
+                        if (noteContent) {
+                            // 查找note-text，这通常包含主要内容
+                            const noteText = noteContent.querySelector('.note-text');
+                            if (noteText && noteText.textContent.trim().length > 50) {
+                                return noteText.textContent.trim();
+                            }
+                            
+                            // 如果没有找到note-text或内容太短，返回整个note-content
+                            if (noteContent.textContent.trim().length > 50) {
+                                return noteContent.textContent.trim();
+                            }
+                        }
+                        
+                        // 如果上面的方法都失败了，尝试获取所有段落并拼接
+                        const paragraphs = Array.from(document.querySelectorAll('p'))
+                            .filter(p => {
+                                // 排除评论区段落
+                                const isInComments = p.closest('.comments-container, .comment-list');
+                                return !isInComments && p.textContent.trim().length > 10;
+                            });
+                            
+                        if (paragraphs.length > 0) {
+                            return paragraphs.map(p => p.textContent.trim()).join('\n\n');
+                        }
+                        
+                        return null;
+                    }
+                ''')
+                
+                if content_text and len(content_text) > 50:
+                    post_content["内容"] = content_text
+                    print(f"方法4获取到正文内容，长度: {len(post_content['内容'])}")
+                else:
+                    print(f"方法4获取到的内容太短或为空: {len(content_text) if content_text else 0}")
+            except Exception as e:
+                print(f"方法4获取正文内容出错: {str(e)}")
+        
+        # 获取帖子正文内容 - 方法5：直接通过DOM结构定位
+        if post_content["内容"] == "未能获取内容":
+            try:
+                print("尝试获取正文内容 - 方法5：直接通过DOM结构定位")
+                content_text = await main_page.evaluate('''
+                    () => {
+                        // 根据您提供的HTML结构直接定位
+                        const noteContent = document.querySelector('div.note-content');
+                        if (noteContent) {
+                            const detailTitle = noteContent.querySelector('#detail-title');
+                            const detailDesc = noteContent.querySelector('#detail-desc');
+                            
+                            if (detailDesc) {
+                                const noteText = detailDesc.querySelector('span.note-text');
+                                if (noteText) {
+                                    return noteText.textContent.trim();
+                                }
+                                return detailDesc.textContent.trim();
+                            }
+                        }
+                        
+                        // 尝试其他可能的结构
+                        const descElements = document.querySelectorAll('div.desc');
+                        for (const desc of descElements) {
+                            // 检查是否在评论区
+                            const isInComment = desc.closest('.comments-container, .comment-list, .feed-comment');
+                            if (!isInComment && desc.textContent.trim().length > 100) {
+                                return desc.textContent.trim();
+                            }
+                        }
+                        
+                        return null;
+                    }
+                ''')
+                
+                if content_text and len(content_text) > 100:
+                    post_content["内容"] = content_text
+                    print(f"方法5获取到正文内容，长度: {len(post_content['内容'])}")
+                else:
+                    print(f"方法5获取到的内容太短或为空: {len(content_text) if content_text else 0}")
+            except Exception as e:
+                print(f"方法5获取正文内容出错: {str(e)}")
         
         # 格式化返回结果
         result = f"标题: {post_content['标题']}\n"
