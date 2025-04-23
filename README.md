@@ -1,8 +1,12 @@
-# 小红书自动评论工具（MCP Server）
-
+# 小红书自动搜索评论工具（MCP Server）
 > 本项目基于 [JonaFly/RednoteMCP](https://github.com/JonaFly/RednoteMCP.git) 并结合我自己的使用经验，进行优化和改进（by windsurf）。在此向原作者表示衷心的感谢！
 
 这是一款基于 Playwright 开发的小红书自动搜索和评论工具，作为 MCP Server，可通过特定配置接入 MCP Client（如Claude for Desktop），帮助用户自动完成登录小红书、搜索关键词、获取笔记内容及发布智能评论等操作。
+
+2.0主要优化内容如下：
+- 优化了搜索笔记时，标题不显示的问题
+- 优化了获取笔记内容时的错误处理，保证正确获取笔记内容
+
 
 ## 一、功能特点
 
