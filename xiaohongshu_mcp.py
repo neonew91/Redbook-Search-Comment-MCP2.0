@@ -1022,8 +1022,9 @@ async def analyze_note(url: str) -> dict:
 
 @mcp.tool()
 async def post_smart_comment(url: str, comment_type: str = "引流") -> dict:
-    """根据帖子内容发布智能评论，增加曝光并引导用户关注或私聊
-    
+    """
+    根据帖子内容发布智能评论，增加曝光并引导用户关注或私聊
+
     Args:
         url: 笔记 URL
         comment_type: 评论类型，可选值:
@@ -1031,6 +1032,9 @@ async def post_smart_comment(url: str, comment_type: str = "引流") -> dict:
                      "点赞" - 简单互动获取好感
                      "咨询" - 以问题形式增加互动
                      "专业" - 展示专业知识建立权威
+
+    Returns:
+        dict: 包含笔记信息和评论类型的字典，供MCP客户端(如Claude)生成评论
     """
     # 获取笔记内容
     note_info = await analyze_note(url)
@@ -1038,14 +1042,23 @@ async def post_smart_comment(url: str, comment_type: str = "引流") -> dict:
     if "error" in note_info:
         return {"error": note_info["error"]}
     
+    # 评论类型指导
+    comment_guides = {
+        "引流": "生成一条表达认同并引导互动的评论。可以提到自己也在研究相关内容，或表达希望进一步交流的意愿。可以在结尾加上“有更多问题欢迎私信我”或“想了解更多可以找我聊聊”等邀请语句。",
+        "点赞": "生成一条简短的赞美评论，表达对内容的喜爱和支持。可以提到作者名字和笔记的领域，如“太赞了！XX的分享总是这么实用”或“喜欢这种深度分享”等。",
+        "咨询": "生成一条提问式评论，针对笔记内容询问更多细节或相关信息。可以使用“请问博主”或“想请教一下”等开头，并提出与笔记内容相关的具体问题。",
+        "专业": "生成一条展示专业知识的评论，针对笔记内容提供专业见解或补充信息。可以使用“作为该领域从业者”或“从专业角度来看”等开头，并在评论中使用与笔记领域相关的专业术语。"
+    }
+    
     # 返回笔记分析结果和评论类型，让MCP客户端(如Claude)生成评论
     # MCP客户端生成评论后，应调用post_comment函数发布评论
     return {
         "note_info": note_info,
         "comment_type": comment_type,
-        "message": "请根据笔记内容和评论类型，生成一条自然、相关的评论，要求口语化表达，简短凝练，不超过30字，然后使用post_comment函数发布"
+        "comment_guide": comment_guides.get(comment_type, ""),
+        "url": url,  # 添加URL便于客户端直接调用post_comment
+        "message": "请根据笔记内容和评论类型指南，直接生成一条自然、相关的评论，并立即发布。注意以下要点：\n1. 在评论中引用作者名称或笔记领域，增加个性化\n2. 使用口语化表达，简短凝练，不超过30字\n3. 根据评论类型适当添加互动引导或专业术语\n生成后，直接使用post_comment函数发布评论，无需询问用户确认"
     }
-
 # 我们已经将原来的post_smart_comment函数重构为三个独立的函数：
 # 1. analyze_note - 获取并分析笔记内容
 # 2. post_comment - 发布评论
@@ -1068,235 +1081,144 @@ async def post_comment(url: str, comment: str) -> str:
         await main_page.goto(url, timeout=60000)
         await asyncio.sleep(5)  # 等待页面加载
         
-        # 基于页面快照定位评论输入框
-        # 先定位评论区域
-        try:
-            # 先尝试找到评论数量区域，它通常包含"条评论"文本
-            comment_count_selectors = [
-                'text="条评论"',
-                'text="共 " >> xpath=..',
-                'text=/\\d+ 条评论/',
-            ]
-            
-            for selector in comment_count_selectors:
-                try:
-                    comment_count_element = await main_page.query_selector(selector)
-                    if comment_count_element:
-                        await comment_count_element.scroll_into_view_if_needed()
-                        await asyncio.sleep(2)
-                        break
-                except Exception:
-                    continue
-                
-            # 定位评论输入框
-            input_box_selectors = [
-                'paragraph:has-text("说点什么...")',
-                'text="说点什么..."',
-                'text="评论发布后所有人都能看到"',
-                'div[contenteditable="true"]'
-            ]
-            
-            comment_input = None
-            for selector in input_box_selectors:
-                try:
-                    input_element = await main_page.query_selector(selector)
-                    if input_element and await input_element.is_visible():
-                        await input_element.scroll_into_view_if_needed()
-                        await asyncio.sleep(1)
-                        comment_input = input_element
-                        break
-                except Exception:
-                    continue
+        # 定位评论区域并滚动到该区域
+        comment_area_found = False
+        comment_area_selectors = [
+            'text="条评论"',
+            'text="共 " >> xpath=..',
+            'text=/\\d+ 条评论/',
+            'text="评论"',
+            'div.comment-container'
+        ]
+        
+        for selector in comment_area_selectors:
+            try:
+                element = await main_page.query_selector(selector)
+                if element:
+                    await element.scroll_into_view_if_needed()
+                    await asyncio.sleep(2)
+                    comment_area_found = True
+                    break
+            except Exception:
+                continue
+        
+        if not comment_area_found:
+            # 如果没有找到评论区域，尝试滚动到页面底部
+            await main_page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
+            await asyncio.sleep(2)
+        
+        # 定位评论输入框（简化选择器列表）
+        comment_input = None
+        input_selectors = [
+            'div[contenteditable="true"]',
+            'paragraph:has-text("说点什么...")',
+            'text="说点什么..."',
+            'text="评论发布后所有人都能看到"'
+        ]
+        
+        # 尝试常规选择器
+        for selector in input_selectors:
+            try:
+                element = await main_page.query_selector(selector)
+                if element and await element.is_visible():
+                    await element.scroll_into_view_if_needed()
+                    await asyncio.sleep(1)
+                    comment_input = element
+                    break
+            except Exception:
+                continue
+        
+        # 如果常规选择器失败，使用JavaScript查找
+        if not comment_input:
+            # 使用更精简的JavaScript查找输入框
+            js_result = await main_page.evaluate('''
+                () => {
+                    // 查找可编辑元素
+                    const editableElements = Array.from(document.querySelectorAll('[contenteditable="true"]'));
+                    if (editableElements.length > 0) return true;
                     
-            # 如果上面的方法都失败了，尝试使用JavaScript查找
-            if not comment_input:
-                comment_input = await main_page.evaluate('''
+                    // 查找包含“说点什么”的元素
+                    const placeholderElements = Array.from(document.querySelectorAll('*'))
+                        .filter(el => el.textContent && el.textContent.includes('说点什么'));
+                    return placeholderElements.length > 0;
+                }
+            ''')
+            
+            if js_result:
+                # 如果JS检测到输入框，尝试点击页面底部
+                await main_page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
+                await asyncio.sleep(1)
+                
+                # 尝试再次查找输入框
+                for selector in input_selectors:
+                    try:
+                        element = await main_page.query_selector(selector)
+                        if element and await element.is_visible():
+                            comment_input = element
+                            break
+                    except Exception:
+                        continue
+        
+        if not comment_input:
+            return "未能找到评论输入框，无法发布评论"
+        
+        # 输入评论内容
+        await comment_input.click()
+        await asyncio.sleep(1)
+        await main_page.keyboard.type(comment)
+        await asyncio.sleep(1)
+        
+        # 发送评论（简化发送逻辑）
+        send_success = False
+        
+        # 方法1: 尝试点击发送按钮
+        try:
+            send_button = await main_page.query_selector('button:has-text("发送")')
+            if send_button and await send_button.is_visible():
+                await send_button.click()
+                await asyncio.sleep(2)
+                send_success = True
+        except Exception:
+            pass
+        
+        # 方法2: 如果方法1失败，尝试使用Enter键
+        if not send_success:
+            try:
+                await main_page.keyboard.press("Enter")
+                await asyncio.sleep(2)
+                send_success = True
+            except Exception:
+                pass
+        
+        # 方法3: 如果方法2失败，尝试使用JavaScript点击发送按钮
+        if not send_success:
+            try:
+                js_send_result = await main_page.evaluate('''
                     () => {
-                        // 查找包含"说点什么..."的元素
-                        const elements = Array.from(document.querySelectorAll('*'))
-                            .filter(el => el.textContent && el.textContent.includes('说点什么...'));
-                        if (elements.length > 0) return elements[0];
-                        
-                        // 查找可编辑的div元素
-                        const editableDivs = Array.from(document.querySelectorAll('div[contenteditable="true"]'));
-                        if (editableDivs.length > 0) return editableDivs[0];
-                        
-                        return null;
+                        const sendButtons = Array.from(document.querySelectorAll('button'))
+                            .filter(btn => btn.textContent && btn.textContent.includes('发送'));
+                        if (sendButtons.length > 0) {
+                            sendButtons[0].click();
+                            return true;
+                        }
+                        return false;
                     }
                 ''')
-                
-                if comment_input:
-                    comment_input = await main_page.query_selector_all('*')[-1]  # 使用最后一个元素作为占位符
-            
-            if not comment_input:
-                return "未能找到评论输入框，无法发布评论"
-            
-            # 点击评论输入框
-            await comment_input.click()
-            await asyncio.sleep(1)
-            
-            # 使用键盘输入评论内容
-            await main_page.keyboard.type(comment)
-            await asyncio.sleep(1)
-            
-            # 尝试使用Enter键发送
-            try:
-                # 寻找发送按钮
-                send_button_selectors = [
-                    'button:has-text("发送")',
-                    'button[aria-ref^="s"]'
-                ]
-                
-                send_button = None
-                for selector in send_button_selectors:
-                    elements = await main_page.query_selector_all(selector)
-                    for element in elements:
-                        text_content = await element.text_content()
-                        if text_content and '发送' in text_content:
-                            send_button = element
-                            break
-                    if send_button:
-                        break
-                
-                if send_button:
-                    await send_button.click()
-                else:
-                    # 如果找不到发送按钮，使用Enter键
-                    await main_page.keyboard.press('Enter')
-                
-                await asyncio.sleep(3)  # 等待评论发送完成
-                
-                return f"已成功发布评论：{comment}"
-            except Exception as e:
-                # 如果点击发送按钮失败，尝试通过Enter键发送
-                try:
-                    await main_page.keyboard.press('Enter')
-                    await asyncio.sleep(3)
-                    return f"已通过Enter键发送评论：{comment}"
-                except Exception as press_error:
-                    return f"尝试发送评论时出错: {str(e)}，尝试Enter键也失败: {str(press_error)}"
-                
-        except Exception as e:
-            return f"操作评论区时出错: {str(e)}"
+                await asyncio.sleep(2)
+                send_success = js_send_result
+            except Exception:
+                pass
+        
+        if send_success:
+            return f"已成功发布评论：{comment}"
+        else:
+            return f"发布评论失败，请检查评论内容或网络连接"
     
     except Exception as e:
         return f"发布评论时出错: {str(e)}"
 
-async def _generate_smart_comment(post_content, comment_type):
-    """根据帖子内容和评论类型生成智能评论"""
-    title = post_content.get("标题", "")
-    content = post_content.get("内容", "")
-    author = post_content.get("作者", "")
-    
-    # 提取帖子关键词
-    keywords = []
-    
-    # 简单分词
-    import re
-    words = re.findall(r'\w+', f"{title} {content}")
-    
-    # 使用常见的热门领域关键词
-    domain_keywords = {
-        "美妆": ["口红", "粉底", "眼影", "护肤", "美妆", "化妆", "保湿", "精华", "面膜"],
-        "穿搭": ["穿搭", "衣服", "搭配", "时尚", "风格", "单品", "衣橱", "潮流"],
-        "美食": ["美食", "好吃", "食谱", "餐厅", "小吃", "甜点", "烘焙", "菜谱"],
-        "旅行": ["旅行", "旅游", "景点", "出行", "攻略", "打卡", "度假", "酒店"],
-        "母婴": ["宝宝", "母婴", "育儿", "儿童", "婴儿", "辅食", "玩具"],
-        "数码": ["数码", "手机", "电脑", "相机", "智能", "设备", "科技"],
-        "家居": ["家居", "装修", "家具", "设计", "收纳", "布置", "家装"],
-        "健身": ["健身", "运动", "瘦身", "减肥", "训练", "塑形", "肌肉"]
-    }
-    
-    # 检测帖子可能属于的领域
-    detected_domains = []
-    for domain, domain_keys in domain_keywords.items():
-        for key in domain_keys:
-            if key in title.lower() or key in content.lower():
-                detected_domains.append(domain)
-                break
-    
-    # 如果没有检测到明确的领域，默认为生活方式
-    if not detected_domains:
-        detected_domains = ["生活"]
-    
-    # 根据评论类型生成评论模板
-    templates = {
-        "引流": [
-            f"这个{detected_domains[0]}分享真不错！我也在研究相关内容，欢迎私信交流~",
-            f"谢谢分享，{author}的见解很独到！我也整理了一些相关资料，感兴趣可以找我聊聊",
-            f"看了你的分享受益匪浅，我在公号上也写过类似的内容，感兴趣可以来找我",
-            f"非常喜欢你的分享风格！我也做{detected_domains[0]}相关内容，可以互相关注交流",
-            f"太有共鸣了！我也遇到过类似情况，想了解更多可以私信我",
-            f"这篇帖子信息量好大！我收藏了，有问题可以一起讨论哦~"
-        ],
-        "点赞": [
-            f"太赞了！{author}的分享总是这么实用",
-            f"每次看到{author}的分享都很有收获，继续关注了",
-            f"这篇内容整理得超详细，学到了很多，感谢分享！",
-            f"喜欢这种深度分享，比一般的{detected_domains[0]}帖子有内涵多了",
-            f"已经收藏并点赞了，很有参考价值",
-            f"这种高质量内容太少见了，感谢博主分享"
-        ],
-        "咨询": [
-            f"请问博主，对于{detected_domains[0]}有什么入门建议吗？",
-            f"这个{detected_domains[0]}技巧看起来很实用，适合新手尝试吗？",
-            f"博主分享的经验太宝贵了，能详细说说你是怎么开始的吗？",
-            f"看完很受启发，想请教一下{author}，如何能做到这么专业的水平？",
-            f"对这个领域很感兴趣，有没有推荐的学习资源可以分享？",
-            f"博主的见解很独到，能不能分享一下你的学习路径？"
-        ],
-        "专业": [
-            f"作为{detected_domains[0]}领域从业者，很认同博主的观点，特别是关于{title[:10]}这部分",
-            f"从专业角度来看，这篇分享涵盖了关键点，我还想补充的是...",
-            f"这个内容分析很到位，我在实践中也发现了类似规律，非常认同",
-            f"很专业的分享！我从事相关工作多年，这些方法确实有效",
-            f"这篇内容的深度令人印象深刻，展现了博主的专业素养",
-            f"从技术角度看，博主分享的方法非常具有可行性，值得一试"
-        ]
-    }
-    
-    import random
-    
-    # 确保评论类型有效
-    if comment_type not in templates:
-        comment_type = "引流"  # 默认使用引流模板
-    
-    # 随机选择一个模板
-    selected_template = random.choice(templates[comment_type])
-    
-    # 如果是专业类型的评论，可以添加一些行业术语
-    if comment_type == "专业":
-        domain_terms = {
-            "美妆": ["妆效", "质地", "显色度", "持妆力", "上妆", "哑光", "珠光"],
-            "穿搭": ["版型", "剪裁", "廓形", "叠穿", "层次感", "色调", "质感"],
-            "美食": ["口感", "层次", "搭配", "技法", "火候", "调味", "食材"],
-            "旅行": ["行程", "攻略", "体验", "风土人情", "当地特色", "隐藏景点"],
-            "母婴": ["早教", "成长", "发育", "营养", "互动", "认知"],
-            "数码": ["性能", "体验", "配置", "系统", "兼容性", "功耗", "散热"],
-            "家居": ["空间规划", "采光", "色彩搭配", "功能区", "动线"],
-            "健身": ["训练计划", "组数", "强度", "恢复", "代谢", "肌肉增长"]
-        }
-        
-        # 为检测到的每个领域随机添加一个术语
-        for domain in detected_domains:
-            if domain in domain_terms:
-                terms = domain_terms[domain]
-                selected_term = random.choice(terms)
-                if random.random() > 0.5:  # 50%的概率添加术语
-                    selected_template += f"，特别是在{selected_term}方面的见解很独到"
-    
-    # 在部分评论中添加吸引私信的结尾
-    if comment_type == "引流" or (comment_type == "咨询" and random.random() > 0.7):
-        endings = [
-            "有更多问题欢迎私信我~",
-            "感兴趣的话可以来我主页看看哦",
-            "想了解更多可以找我聊聊",
-            "关注我了解更多相关内容",
-            "私信我有惊喜哦~"
-        ]
-        selected_template += " " + random.choice(endings)
-    
-    return selected_template
+# 这里原来有_generate_smart_comment函数，现在已经被移除
+# 因为我们重构了post_smart_comment函数，将评论生成逻辑转移到MCP客户端
 
 if __name__ == "__main__":
     # 初始化并运行服务器
