@@ -115,6 +115,24 @@
 > - 同样，xiaohongshu_mcp.py也需要使用**完整绝对路径**
 > - Windows路径中的反斜杠在JSON中需要双重转义（使用 `\`）
 
+### Python 命令区分（python 与 python3）
+
+不同系统环境中，Python 命令可能有所不同，这取决于您的系统配置。以下是如何确定您应该使用哪个命令：
+
+1. **确定您的 Python 命令**：
+   - 在终端中运行：`python --version` 和 `python3 --version`
+   - 查看哪个命令返回 Python 3.x 版本（本项目需要 Python 3.8+）
+
+2. **在虚拟环境中确认**：
+   - 激活虚拟环境后，运行 `which python` 或 `where python`（Windows）
+   - 这将显示 Python 解释器的完整路径
+
+3. **配置中使用正确的命令**：
+   - Mac：通常为 `python3` 或虚拟环境中的 `python`
+   - Windows：通常为 `python` 或 `python.exe`
+
+在配置文件中，始终使用虚拟环境中 Python 解释器的**完整绝对路径**，而不是命令名称。
+
 ## 四、使用方法
 
 ### （一）启动服务器
