@@ -76,6 +76,8 @@
 
 在 MCP Client（如Claude for Desktop）的配置文件中添加以下内容，将本工具配置为 MCP Server：
 
+### Mac 配置示例
+
 ```json
 {
     "mcpServers": {
@@ -90,10 +92,28 @@
 }
 ```
 
+### Windows 配置示例
+
+```json
+{
+    "mcpServers": {
+        "xiaohongshu MCP": {
+            "command": "C:\\Users\\username\\Desktop\\MCP\\Redbook-Search-Comment-MCP2.0\\venv\\Scripts\\python.exe",
+            "args": [
+                "C:\\Users\\username\\Desktop\\MCP\\Redbook-Search-Comment-MCP2.0\\xiaohongshu_mcp.py",
+                "--stdio"
+            ]
+        }
+    }
+}
+```
+
 > **重要提示**：
 > - 请使用虚拟环境中Python解释器的**完整绝对路径**
-> - 例如：`/Users/username/Desktop/RedBook-Search-Comment-MCP/venv/bin/python3`
+> - Mac示例：`/Users/username/Desktop/RedBook-Search-Comment-MCP/venv/bin/python3`
+> - Windows示例：`C:\Users\username\Desktop\MCP\Redbook-Search-Comment-MCP2.0\venv\Scripts\python.exe`
 > - 同样，xiaohongshu_mcp.py也需要使用**完整绝对路径**
+> - Windows路径中的反斜杠在JSON中需要双重转义（使用 `\`）
 
 ## 四、使用方法
 
