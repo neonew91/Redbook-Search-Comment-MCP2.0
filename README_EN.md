@@ -1,4 +1,10 @@
 # Xiaohongshu (RED) Auto Search & Comment Tool (MCP Server 2.0)
+
+<div align="right">
+
+English | [中文](README.md)
+
+</div>
 > This project is based on [JonaFly/RednoteMCP](https://github.com/JonaFly/RednoteMCP.git) with comprehensive optimizations and feature extensions based on multiple practical experiences (by windsurf). Sincere thanks to the original author for their contributions!
 
 This is a Xiaohongshu (RED) automatic search and comment tool developed with Playwright. As an MCP Server, it can be integrated with MCP Clients (such as Claude for Desktop) through specific configurations, helping users automatically log in to Xiaohongshu, search for keywords, retrieve note content, and publish AI-generated comments.
