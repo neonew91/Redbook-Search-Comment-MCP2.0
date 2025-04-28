@@ -271,7 +271,7 @@ async def get_note_content(url: str) -> str:
         
         # 打印页面结构片段用于分析
         try:
-            print("打印页面结构片段用于分析")
+            # print("打印页面结构片段用于分析")
             page_structure = await main_page.evaluate('''
                 () => {
                     // 获取笔记内容区域
@@ -290,7 +290,7 @@ async def get_note_content(url: str) -> str:
                     };
                 }
             ''')
-            print(f"页面结构分析: {json.dumps(page_structure, ensure_ascii=False, indent=2)}")
+            # print(f"页面结构分析: {json.dumps(page_structure, ensure_ascii=False, indent=2)}")
         except Exception as e:
             print(f"打印页面结构时出错: {str(e)}")
         
@@ -299,14 +299,14 @@ async def get_note_content(url: str) -> str:
         
         # 获取帖子标题 - 方法1：使用id选择器
         try:
-            print("尝试获取标题 - 方法1：使用id选择器")
+            # print("尝试获取标题 - 方法1：使用id选择器")
             title_element = await main_page.query_selector('#detail-title')
             if title_element:
                 title = await title_element.text_content()
                 post_content["标题"] = title.strip() if title else "未知标题"
-                print(f"方法1获取到标题: {post_content['标题']}")
+                # print(f"方法1获取到标题: {post_content['标题']}")
             else:
-                print("方法1未找到标题元素")
+                # print("方法1未找到标题元素")
                 post_content["标题"] = "未知标题"
         except Exception as e:
             print(f"方法1获取标题出错: {str(e)}")
@@ -315,21 +315,21 @@ async def get_note_content(url: str) -> str:
         # 获取帖子标题 - 方法2：使用class选择器
         if post_content["标题"] == "未知标题":
             try:
-                print("尝试获取标题 - 方法2：使用class选择器")
+                # print("尝试获取标题 - 方法2：使用class选择器")
                 title_element = await main_page.query_selector('div.title')
                 if title_element:
                     title = await title_element.text_content()
                     post_content["标题"] = title.strip() if title else "未知标题"
-                    print(f"方法2获取到标题: {post_content['标题']}")
-                else:
-                    print("方法2未找到标题元素")
+                    # print(f"方法2获取到标题: {post_content['标题']}")
+                # else:
+                #     print("方法2未找到标题元素")
             except Exception as e:
                 print(f"方法2获取标题出错: {str(e)}")
         
         # 获取帖子标题 - 方法3：使用JavaScript
         if post_content["标题"] == "未知标题":
             try:
-                print("尝试获取标题 - 方法3：使用JavaScript")
+                # print("尝试获取标题 - 方法3：使用JavaScript")
                 title = await main_page.evaluate('''
                     () => {
                         // 尝试多种可能的标题选择器
@@ -351,22 +351,22 @@ async def get_note_content(url: str) -> str:
                 ''')
                 if title:
                     post_content["标题"] = title
-                    print(f"方法3获取到标题: {post_content['标题']}")
-                else:
-                    print("方法3未找到标题元素")
+                    # print(f"方法3获取到标题: {post_content['标题']}")
+                # else:
+                #     print("方法3未找到标题元素")
             except Exception as e:
                 print(f"方法3获取标题出错: {str(e)}")
         
         # 获取作者 - 方法1：使用username类选择器
         try:
-            print("尝试获取作者 - 方法1：使用username类选择器")
+            # print("尝试获取作者 - 方法1：使用username类选择器")
             author_element = await main_page.query_selector('span.username')
             if author_element:
                 author = await author_element.text_content()
                 post_content["作者"] = author.strip() if author else "未知作者"
-                print(f"方法1获取到作者: {post_content['作者']}")
+                # print(f"方法1获取到作者: {post_content['作者']}")
             else:
-                print("方法1未找到作者元素")
+                # print("方法1未找到作者元素")
                 post_content["作者"] = "未知作者"
         except Exception as e:
             print(f"方法1获取作者出错: {str(e)}")
@@ -375,21 +375,21 @@ async def get_note_content(url: str) -> str:
         # 获取作者 - 方法2：使用链接选择器
         if post_content["作者"] == "未知作者":
             try:
-                print("尝试获取作者 - 方法2：使用链接选择器")
+                # print("尝试获取作者 - 方法2：使用链接选择器")
                 author_element = await main_page.query_selector('a.name')
                 if author_element:
                     author = await author_element.text_content()
                     post_content["作者"] = author.strip() if author else "未知作者"
-                    print(f"方法2获取到作者: {post_content['作者']}")
-                else:
-                    print("方法2未找到作者元素")
+                    # print(f"方法2获取到作者: {post_content['作者']}")
+                # else:
+                #     print("方法2未找到作者元素")
             except Exception as e:
                 print(f"方法2获取作者出错: {str(e)}")
         
         # 获取作者 - 方法3：使用JavaScript
         if post_content["作者"] == "未知作者":
             try:
-                print("尝试获取作者 - 方法3：使用JavaScript")
+                # print("尝试获取作者 - 方法3：使用JavaScript")
                 author = await main_page.evaluate('''
                     () => {
                         // 尝试多种可能的作者选择器
@@ -411,22 +411,22 @@ async def get_note_content(url: str) -> str:
                 ''')
                 if author:
                     post_content["作者"] = author
-                    print(f"方法3获取到作者: {post_content['作者']}")
-                else:
-                    print("方法3未找到作者元素")
+                    # print(f"方法3获取到作者: {post_content['作者']}")
+                # else:
+                #     print("方法3未找到作者元素")
             except Exception as e:
                 print(f"方法3获取作者出错: {str(e)}")
         
         # 获取发布时间 - 方法1：使用date类选择器
         try:
-            print("尝试获取发布时间 - 方法1：使用date类选择器")
+            # print("尝试获取发布时间 - 方法1：使用date类选择器")
             time_element = await main_page.query_selector('span.date')
             if time_element:
                 time_text = await time_element.text_content()
                 post_content["发布时间"] = time_text.strip() if time_text else "未知"
-                print(f"方法1获取到发布时间: {post_content['发布时间']}")
+                # print(f"方法1获取到发布时间: {post_content['发布时间']}")
             else:
-                print("方法1未找到发布时间元素")
+                # print("方法1未找到发布时间元素")
                 post_content["发布时间"] = "未知"
         except Exception as e:
             print(f"方法1获取发布时间出错: {str(e)}")
@@ -435,7 +435,7 @@ async def get_note_content(url: str) -> str:
         # 获取发布时间 - 方法2：使用正则表达式匹配
         if post_content["发布时间"] == "未知":
             try:
-                print("尝试获取发布时间 - 方法2：使用正则表达式匹配")
+                # print("尝试获取发布时间 - 方法2：使用正则表达式匹配")
                 time_selectors = [
                     'text=/编辑于/',
                     'text=/\\d{2}-\\d{2}/',
@@ -452,18 +452,18 @@ async def get_note_content(url: str) -> str:
                     if time_element:
                         time_text = await time_element.text_content()
                         post_content["发布时间"] = time_text.strip() if time_text else "未知"
-                        print(f"方法2获取到发布时间: {post_content['发布时间']}")
+                        # print(f"方法2获取到发布时间: {post_content['发布时间']}")
                         break
-                    else:
-                        print(f"方法2未找到发布时间元素: {selector}")
+                    # else:
+                    #     print(f"方法2未找到发布时间元素: {selector}")
             except Exception as e:
                 print(f"方法2获取发布时间出错: {str(e)}")
         
         # 获取发布时间 - 方法3：使用JavaScript
         if post_content["发布时间"] == "未知":
             try:
-                print("尝试获取发布时间 - 方法3：使用JavaScript")
-                time_text = await main_page.evaluate('''
+                # print("尝试获取发布时间 - 方法3：使用JavaScript")
+                time_text = await main_page.evaluate(r'''
                     () => {
                         // 尝试多种可能的时间选择器
                         const selectors = [
@@ -504,15 +504,15 @@ async def get_note_content(url: str) -> str:
                 ''')
                 if time_text:
                     post_content["发布时间"] = time_text
-                    print(f"方法3获取到发布时间: {post_content['发布时间']}")
-                else:
-                    print("方法3未找到发布时间元素")
+                    # print(f"方法3获取到发布时间: {post_content['发布时间']}")
+                # else:
+                #     print("方法3未找到发布时间元素")
             except Exception as e:
                 print(f"方法3获取发布时间出错: {str(e)}")
         
         # 获取帖子正文内容 - 方法1：使用精确的ID和class选择器
         try:
-            print("尝试获取正文内容 - 方法1：使用精确的ID和class选择器")
+            # print("尝试获取正文内容 - 方法1：使用精确的ID和class选择器")
             
             # 先明确标记评论区域
             await main_page.evaluate('''
@@ -546,15 +546,15 @@ async def get_note_content(url: str) -> str:
                     content_text = await content_element.text_content()
                     if content_text and len(content_text.strip()) > 50:  # 增加长度阈值
                         post_content["内容"] = content_text.strip()
-                        print(f"方法1获取到正文内容，长度: {len(post_content['内容'])}")
+                        # print(f"方法1获取到正文内容，长度: {len(post_content['内容'])}")
                     else:
-                        print(f"方法1获取到的内容太短: {len(content_text.strip() if content_text else 0)}")
+                        # print(f"方法1获取到的内容太短: {len(content_text.strip() if content_text else 0)}")
                         post_content["内容"] = "未能获取内容"
                 else:
-                    print("方法1找到的元素在评论区域内，跳过")
+                    # print("方法1找到的元素在评论区域内，跳过")
                     post_content["内容"] = "未能获取内容"
             else:
-                print("方法1未找到正文内容元素")
+                # print("方法1未找到正文内容元素")
                 post_content["内容"] = "未能获取内容"
         except Exception as e:
             print(f"方法1获取正文内容出错: {str(e)}")
@@ -563,7 +563,7 @@ async def get_note_content(url: str) -> str:
         # 获取帖子正文内容 - 方法2：使用XPath选择器
         if post_content["内容"] == "未能获取内容":
             try:
-                print("尝试获取正文内容 - 方法2：使用XPath选择器")
+                # print("尝试获取正文内容 - 方法2：使用XPath选择器")
                 # 使用XPath获取笔记内容区域
                 content_text = await main_page.evaluate('''
                     () => {
@@ -576,16 +576,16 @@ async def get_note_content(url: str) -> str:
                 
                 if content_text and len(content_text) > 20:
                     post_content["内容"] = content_text
-                    print(f"方法2获取到正文内容，长度: {len(post_content['内容'])}")
-                else:
-                    print(f"方法2获取到的内容太短或为空: {len(content_text) if content_text else 0}")
+                    # print(f"方法2获取到正文内容，长度: {len(post_content['内容'])}")
+                # else:
+                #     print(f"方法2获取到的内容太短或为空: {len(content_text) if content_text else 0}")
             except Exception as e:
                 print(f"方法2获取正文内容出错: {str(e)}")
         
         # 获取帖子正文内容 - 方法3：使用JavaScript获取最长文本
         if post_content["内容"] == "未能获取内容":
             try:
-                print("尝试获取正文内容 - 方法3：使用JavaScript获取最长文本")
+                # print("尝试获取正文内容 - 方法3：使用JavaScript获取最长文本")
                 content_text = await main_page.evaluate('''
                     () => {
                         // 定义评论区域选择器
@@ -633,16 +633,16 @@ async def get_note_content(url: str) -> str:
                 
                 if content_text and len(content_text) > 100:  # 增加长度阈值
                     post_content["内容"] = content_text
-                    print(f"方法3获取到正文内容，长度: {len(post_content['内容'])}")
-                else:
-                    print(f"方法3获取到的内容太短或为空: {len(content_text) if content_text else 0}")
+                    # print(f"方法3获取到正文内容，长度: {len(post_content['内容'])}")
+                # else:
+                #     print(f"方法3获取到的内容太短或为空: {len(content_text) if content_text else 0}")
             except Exception as e:
                 print(f"方法3获取正文内容出错: {str(e)}")
         
         # 获取帖子正文内容 - 方法4：区分正文和评论内容
         if post_content["内容"] == "未能获取内容":
             try:
-                print("尝试获取正文内容 - 方法4：区分正文和评论内容")
+                # print("尝试获取正文内容 - 方法4：区分正文和评论内容")
                 content_text = await main_page.evaluate('''
                     () => {
                         // 首先尝试获取note-content区域
@@ -678,16 +678,16 @@ async def get_note_content(url: str) -> str:
                 
                 if content_text and len(content_text) > 50:
                     post_content["内容"] = content_text
-                    print(f"方法4获取到正文内容，长度: {len(post_content['内容'])}")
-                else:
-                    print(f"方法4获取到的内容太短或为空: {len(content_text) if content_text else 0}")
+                    # print(f"方法4获取到正文内容，长度: {len(post_content['内容'])}")
+                # else:
+                #     print(f"方法4获取到的内容太短或为空: {len(content_text) if content_text else 0}")
             except Exception as e:
                 print(f"方法4获取正文内容出错: {str(e)}")
         
         # 获取帖子正文内容 - 方法5：直接通过DOM结构定位
         if post_content["内容"] == "未能获取内容":
             try:
-                print("尝试获取正文内容 - 方法5：直接通过DOM结构定位")
+                # print("尝试获取正文内容 - 方法5：直接通过DOM结构定位")
                 content_text = await main_page.evaluate('''
                     () => {
                         // 根据您提供的HTML结构直接定位
@@ -721,18 +721,38 @@ async def get_note_content(url: str) -> str:
                 
                 if content_text and len(content_text) > 100:
                     post_content["内容"] = content_text
-                    print(f"方法5获取到正文内容，长度: {len(post_content['内容'])}")
-                else:
-                    print(f"方法5获取到的内容太短或为空: {len(content_text) if content_text else 0}")
+                    # print(f"方法5获取到正文内容，长度: {len(post_content['内容'])}")
+                # else:
+                #     print(f"方法5获取到的内容太短或为空: {len(content_text) if content_text else 0}")
             except Exception as e:
                 print(f"方法5获取正文内容出错: {str(e)}")
+        
+        # 获取图文帖子图片列表
+        imagesMap = {}
+        images = []
+        slides = main_page.locator("div.swiper-wrapper > div[data-index]")
+        count = await slides.count()
+        if count > 0:
+            for i in range(count):
+                try:
+                    slide = slides.nth(i)
+                    index = await slide.get_attribute("data-index")
+                    src = await slide.locator(".img-container img").get_attribute("src")
+                    imagesMap[index] = src
+                except Exception as e:
+                    print(f"获取图片 {i} 出错: {str(e)}")
+            if imagesMap:
+                images = [imagesMap[k] for k in sorted(imagesMap)]
+        
         
         # 格式化返回结果
         result = f"标题: {post_content['标题']}\n"
         result += f"作者: {post_content['作者']}\n"
         result += f"发布时间: {post_content['发布时间']}\n"
         result += f"链接: {url}\n\n"
-        result += f"内容:\n{post_content['内容']}"
+        result += f"内容:\n{post_content['内容']}\n"
+        if images:
+            result += f"图片: {images}\n"
         
         return result
     
